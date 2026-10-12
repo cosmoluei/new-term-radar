@@ -4,14 +4,14 @@
   python -m radar sources  [--config config.json] [--state state] [--out sources.md] [--mail]
 
 Signals:
-  ① x         names the accounts you follow said for the first time (AIsa)
+  ① x         names the accounts you follow said for the first time (x_posts dump / X API / optional AIsa)
   ① hf        models new to Hugging Face's trending top 50
   ② breakout  one new GitHub repo taking off on its own
   ③ sitemaps  pages other sites added since the last run
-  ③ newsites  domains registered in the last 90 days that already rank (weekly; AIsa)
+  ③ newsites  domains registered in the last 90 days that already rank (weekly; needs AIsa)
   ④ gsc       queries your own site got impressions for, for the first time (optional)
-  ⑤ review    leads from 14 days ago checked in Google Trends; hit rate per signal (AIsa)
-  usecases    the generic terms behind today's names, sized against a benchmark keyword (AIsa)
+  ⑤ review    leads from 14 days ago checked in Google Trends; hit rate per signal (needs AIsa)
+  usecases    the generic terms behind today's names, sized against a benchmark keyword (needs AIsa)
 
 `sources` runs only ① (they change by the hour) and writes a report only when there is a
 name or an error. `daily` runs everything; give it `--skip x,hf` when `sources` runs
@@ -28,7 +28,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from . import breakout, config, gsc, new_sites, notify, report, review, sitemaps, sources, store, usecases
+from . import aisa, breakout, config, gsc, new_sites, notify, report, review, sitemaps, sources, store, usecases
 from .i18n import t
 
 SKIPPABLE = {"x", "hf", "breakout", "sitemaps", "newsites", "gsc", "review", "judge", "usecases"}
@@ -112,6 +112,10 @@ def main(argv: list[str] | None = None) -> int:
     if unknown:
         p.error(f"--skip: unknown {sorted(unknown)}")
     cfg = config.load(Path(args.config))
+    # Paid DataForSEO / Trends / whois / usecase evidence still need AIsa. Without a key
+    # they skip so the free path (HF, GitHub, sitemaps, X dump/API, heuristic judge) runs.
+    if not aisa.available():
+        args.skip |= {"newsites", "review", "usecases"}
     if "judge" in args.skip:
         cfg["judge"]["model"] = ""
     state = Path(args.state)

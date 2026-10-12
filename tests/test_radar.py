@@ -201,17 +201,21 @@ def test_judge_scores_rows_in_chunks(monkeypatch):
         n = len(json.loads(user))
         sizes.append(n)
         return json.dumps([{"i": i, "score": 0.8} for i in range(n)])
-    monkeypatch.setattr(judge.aisa, "chat", chat)
-    assert judge.score(rows, "m") == {"judged": judge.CHUNK + 2} and sizes == [judge.CHUNK, 2]
+    monkeypatch.setattr(judge.llm, "available", lambda: True)
+    monkeypatch.setattr(judge.llm, "chat", chat)
+    out = judge.score(rows, "m")
+    assert out["judged"] == judge.CHUNK + 2 and out.get("backend") == "llm" and sizes == [judge.CHUNK, 2]
     assert all(r["named"] == 0.8 for r in rows)
 
 
-def test_judge_failure_leaves_rows_unscored(monkeypatch):
+def test_judge_failure_falls_back_to_heuristic(monkeypatch):
     def chat(*a):
-        raise judge.aisa.AisaError("HTTP 402: no credit")
-    monkeypatch.setattr(judge.aisa, "chat", chat)
-    rows = [{"term": "strata", "examples": []}]
-    assert "error" in judge.score(rows, "m") and "named" not in rows[0]
+        raise judge.llm.LLMError("HTTP 402: no credit")
+    monkeypatch.setattr(judge.llm, "available", lambda: True)
+    monkeypatch.setattr(judge.llm, "chat", chat)
+    rows = [{"term": "opus 5.5", "examples": ["Claude Opus 5.5"]}]
+    out = judge.score(rows, "m")
+    assert "error" in out and out.get("backend") == "heuristic" and "named" in rows[0]
 
 
 # --- merging the signals ---------------------------------------------------------------------
@@ -711,3 +715,41 @@ def test_only_things_are_read_for_generic_terms_not_words_that_surged():
     recent = [{"term": "qwen image 2.1", "kinds": ["hf"], "named": 0.96}, {"term": "use rea", "kinds": ["x"], "named": 0.72},
               {"term": "photocraft", "kinds": ["x"], "named": 0.9}]
     assert usecases.names_to_read(today, recent) == ["photocraft", "hailuo", "qwen image 2.1"]
+
+
+# --- free path: heuristic judge + x dump -------------------------------------------
+
+def test_heuristic_prefers_versioned_names():
+    from radar.judge import heuristic_score
+    assert heuristic_score("opus 5.5", ["Claude Opus 5.5 is out"]) >= 0.7
+    assert heuristic_score("lots", ["Lots of people tried it"]) < 0.4
+    assert heuristic_score("photocraft", ["storytold/photocraft: photo editor"]) >= 0.5
+
+
+def test_x_dump_backend(cfg, tmp_path):
+    from datetime import datetime, timezone
+    import json
+    from radar import sources
+    now = datetime.now(timezone.utc).isoformat()
+    cfg["x_accounts"] = {"labs": ["a", "b"], "bloggers": []}
+    # First run builds vocabulary from baseline posts.
+    (tmp_path / "x_posts.json").write_text(json.dumps({
+        "fetched_at": now,
+        "posts": [
+            {"account": "a", "text": "Hello world today", "likes": 10, "created": now, "url": ""},
+            {"account": "b", "text": "Another ordinary post", "likes": 5, "created": now, "url": ""},
+        ],
+    }))
+    first = sources.x_new(cfg, tmp_path)
+    assert first["backend"] == "dump" and first["first_run"] is True and first["terms"] == []
+    # Second run: a new name appears in the dump.
+    (tmp_path / "x_posts.json").write_text(json.dumps({
+        "fetched_at": now,
+        "posts": [
+            {"account": "a", "text": "Strata is fast", "likes": 10, "created": now, "url": ""},
+            {"account": "b", "text": "Tried Strata today", "likes": 5, "created": now, "url": ""},
+        ],
+    }))
+    second = sources.x_new(cfg, tmp_path)
+    assert second["first_run"] is False
+    assert any(r["term"] == "strata" for r in second["terms"])

@@ -30,6 +30,10 @@ class AisaError(RuntimeError):
     pass
 
 
+def available() -> bool:
+    return bool(os.environ.get("AISA_API_KEY", "").strip())
+
+
 def key() -> str:
     k = os.environ.get("AISA_API_KEY", "").strip()
     if not k:

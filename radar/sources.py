@@ -1,7 +1,8 @@
 """Signal ①, the sources: where a new name is said first.
 
-x_new    names in the last day's posts of the accounts in config.json ("x_accounts",
-         read through AIsa) that none of those accounts has used in the last VOCAB_DAYS.
+x_new    names in the last day's posts of the accounts in config.json ("x_accounts")
+         that none of those accounts has used in the last VOCAB_DAYS. Posts come from
+         state/x_posts.json, X_BEARER_TOKEN (X API v2), or optionally AIsa — see xclient.
          The vocabulary is kept in the state directory; the first run only builds it.
 hf_new   models that entered Hugging Face's trending top HF_TOP since the last run (the
          public API, no key). Quantised and fine-tuned copies of one model are grouped
@@ -15,7 +16,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from . import UA, aisa, snap
+from . import UA, snap, xclient
 from .i18n import t
 from .terms import STOP, _drop_nested, names
 
@@ -86,13 +87,10 @@ def x_new(cfg: dict, state: Path) -> dict:
     handles = accounts(cfg)
     if not handles:
         return {"skipped": True}
-    data, cost = aisa.call_all([{"call_id": h, "tool": "get_twitter_user_last_tweets", "arguments": {"userName": h}}
-                                for h in handles])
-    posts = []
-    for h in handles:
-        for tw in ((data.get(h) or {}).get("data") or {}).get("tweets") or []:
-            posts.append({"account": h, "text": tw.get("text") or "", "likes": int(tw.get("likeCount") or 0),
-                          "url": tw.get("url", ""), "created": _posted(tw)})
+    try:
+        posts, meta = xclient.fetch_posts(handles, state)
+    except xclient.XUnavailable as exc:
+        return {"skipped": True, "reason": str(exc)[:160]}
     path = state / "x_vocab.json.gz"
     vocab: dict[str, str] | None = snap.load(path)
     first_run = vocab is None
@@ -106,7 +104,8 @@ def x_new(cfg: dict, state: Path) -> dict:
             vocab[term] = today
     if posts:   # a failed fetch keeps yesterday's vocabulary
         snap.save(path, {term: d for term, d in vocab.items() if d >= cutoff})
-    return {"accounts": len(handles), "answered": len(data), "posts": len(posts), "cost_micros": cost,
+    return {"accounts": len(handles), "answered": meta.get("answered", 0), "posts": len(posts),
+            "cost_micros": meta.get("cost_micros", 0), "backend": meta.get("backend"),
             "first_run": first_run, "terms": rows}
 
 

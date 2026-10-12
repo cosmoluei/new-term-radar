@@ -24,7 +24,7 @@
 
 | 信号 | 抓什么 | 需要 | 花费 |
 |---|---|---|---|
-| ① X | 你关注的账号里，60 天内第一次出现的名字 | AIsa key | 每个账号每次 $0.003 |
+| ① X | 你关注的账号里，60 天内第一次出现的名字 | x_posts dump / X_BEARER_TOKEN / 可选 AIsa | 免费（dump/API）或 AIsa 按次 |
 | ① Hugging Face | 新进热门榜前 50 的模型；量化版、微调版归到同一个基础名下 | 无 | 免费 |
 | ② GitHub 爆发 | 创建不到 14 天、平均每天涨 200 星以上，或比昨天多 400 星的仓库；附带大家实际会搜的写法（「niko strata」） | 无（有 GitHub token 限额更高） | 免费 |
 | ③ 竞品 sitemap | 某个站新增的几个网址共用、而它的旧网址里很少出现的词 | 你列出的 sitemap | 免费 |
@@ -32,7 +32,7 @@
 | ④ Search Console | 你的站第一次获得曝光的查询词（用新鲜数据） | 你自己的 Google 授权 | 免费 |
 | ⑤ 复盘 | 每条线索 14 天后去 Google Trends 核对，和它自己的基线比；按信号统计命中率和提前天数 | AIsa key | 每个搜索写法 $0.0012 |
 | 新词表 | 针对当天的新名字:找出它背后的通用搜索词(大家拿这个新东西做什么),逐个估算规模并给出决策 | AIsa key；GoAnyAPI key 可选 | 5 个名字约每天 $0.15，加上 GoAnyAPI 约 $0.22 |
-| 名字判断 | 小模型给每个词打分：是某个具体东西的名字，还是普通词？ | AIsa key | 每次不到一美分 |
+| 名字判断 | 给每个词打分：是某个具体东西的名字，还是普通词？ | heuristic（默认）或 LLM/AIsa | 免费或按模型计费 |
 
 价格是 2026 年 10 月 AIsa 的实际收费。按示例配置（35 个 X 账号、每天读三次，新词表每天读 5 个名字），一个月约 $15：读 X 约 $10，新词表约 $5。少读几个账号或者每天只读一次，费用按比例下降。
 
@@ -75,15 +75,17 @@
 
 把配置写成 `"usecases": {"per_day": 0}`，或者加 `--skip usecases`，可以关掉它。
 
-## 一个必需的 key，一个可选的
+## Keys：默认零成本，AIsa 可选
 
-所有付费的部分都走 [AIsa](https://go.aisa.one/yansen-zhu)：X 帖子、Google Trends 和域名数据（背后是 DataForSEO）、判断名字的模型。一个 key，按次付费，不用分别订阅 X API 和 DataForSEO。
+本 fork 默认**不需要** AIsa。详见 [docs/ZERO_COST.md](docs/ZERO_COST.md)。
 
-> 上面是推荐链接：通过它注册是对这个项目的支持。从 aisa.one 任何入口拿到的 key 用起来完全一样。
+- **X**：优先读 `state/x_posts.json`（可用 Grok Bot 的 X MCP 刷新），或设置 `X_BEARER_TOKEN` 走官方 X API v2；两者都没有时才回退到 `AISA_API_KEY`。
+- **名字判断**：默认 `heuristic`（本地规则）。也可以设 `LLM_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` 用便宜的对话模型。
+- **仍需要 AIsa 的信号**：新站 whois、14 天复盘 Trends、新词表（usecases）。没有 `AISA_API_KEY` 时会自动跳过。
 
-**可选：`GOANYAPI_API_KEY`**（[goanyapi.com](https://goanyapi.com)）从两方面改进新词表，每天约 $0.07：给每个名字加上 Google Trends 的相关查询；名字和规模较大的通用词（月搜 1,000 以上，最多 8 行）的走势，改用单个国家的 30 天日数据来读，这份数据结算到昨天。这些行的「现在」一列后面会标出国家，例如 `还在涨 (US)`。不配这个 key，新词表只用模型提出的写法和全球数据。这个服务很新（2026 年 8 月才发布）；我们测试时每次调用要 20 到 55 秒，大约十次有一次失败，所以雷达会试两次，失败就写在表里，继续往下跑。
+上游原版把 X、Trends、域名和判断都绑在 [AIsa](https://go.aisa.one/yansen-zhu) 上；本 fork 保留兼容，但不再当作必需。
 
-没有 AIsa 的 key 时，免费的信号照常运行（Hugging Face、GitHub、sitemap、Search Console），只是报告里所有词不分先后列出，因为没有模型判断哪些是名字。
+**可选：`GOANYAPI_API_KEY`**（[goanyapi.com](https://goanyapi.com)）改进新词表里的相关查询与单国 Trends（仅在启用 usecases 且已有 AIsa 时有意义）。
 
 ## 快速开始
 

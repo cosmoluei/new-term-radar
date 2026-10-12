@@ -11,7 +11,7 @@
       "Alibaba_Qwen",
       "deepseek_ai",
       "Kimi_Moonshot",
-      "MiniMax__AI",
+      "MiniMax_AI",
       "Zai_org",
       "xai",
       "AIatMeta",
@@ -72,7 +72,7 @@
   ],
   "stop_words": [],
   "judge": {
-    "model": "gpt-4.1-mini",
+    "model": "heuristic",
     "min_score": 0.5
   },
   "breakout": {
@@ -93,7 +93,7 @@
     "per_day": 5
   },
   "usecases": {
-    "per_day": 5,
+    "per_day": 0,
     "model": "claude-sonnet-4-6",
     "benchmark": "gpts",
     "min_volume": 50,

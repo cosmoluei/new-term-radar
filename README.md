@@ -226,3 +226,6 @@ The tests cover the logic (name extraction, scoring, the store, the reports) and
 ## License
 
 MIT. Extracted from the radar that runs daily behind [agentskillshub.top](https://agentskillshub.top).
+
+
+> Cosmo fork: zero-AIsa path documented in [docs/ZERO_COST.md](docs/ZERO_COST.md).
